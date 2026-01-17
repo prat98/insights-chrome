@@ -74,7 +74,7 @@ const konfluxDevServerSettings = {
 // dev server proxy config when not running in Konflux CI
 const nonKonfluxDevServerConfiguration = () => {
   return proxy({
-    env: 'stage-beta',
+    env: 'prod-stable',
     port: 1337,
     appUrl: [/^\/*$/],
     useProxy: true,
@@ -83,6 +83,10 @@ const nonKonfluxDevServerConfiguration = () => {
     isChrome: true,
     frontendCRDPath: path.resolve(__dirname, '../frontend.yml'),
     routes: {
+      // Local Hub development - proxy to local vite build
+      '/apps/automation-hub': {
+        host: 'http://localhost:8002',
+      },
       ...(process.env.CHROME_SERVICE && {
         // web sockets
         '/wss/chrome-service/': {
