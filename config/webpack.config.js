@@ -242,6 +242,14 @@ const commonConfig = ({ dev }) => {
       port: 1337,
       // HMR flag
       hot: true,
+      // Suppress @rhds/elements "Critical dependency" warning in overlay
+      client: {
+        overlay: {
+          errors: true,
+          warnings: false,
+          runtimeErrors: true,
+        },
+      },
       ...contextualConfigSettings,
     },
   };
