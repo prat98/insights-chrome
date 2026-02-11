@@ -8,8 +8,8 @@ WORKDIR /app
 # Install galaxy_ng and its dependencies
 RUN pip install --no-cache-dir -e .
 
-# Set up required certs and keys (from dev/compose)
-RUN mkdir -p /etc/pulp/certs /var/lib/pulp/scripts /etc/pulp/gnupg && \
+# Set up required dirs, certs and keys (from dev/compose)
+RUN mkdir -p /etc/pulp/certs /var/lib/pulp/scripts /var/lib/pulp/tmp /etc/pulp/gnupg /tmp/ansible && \
     cp /app/dev/compose/database/database_fields.symmetric.key /etc/pulp/certs/ && \
     cp /app/dev/compose/signing/keys/* /etc/pulp/certs/ && \
     cp /app/dev/compose/signing/scripts/* /var/lib/pulp/scripts/ && \
