@@ -9,11 +9,11 @@ FROM hub-dev-env:latest AS source
 FROM fedora:39
 
 # Install system deps that galaxy_ng needs
-RUN dnf -y install python3.11 python3.11-devel python3.11-pip gcc git libpq-devel openldap-devel cyrus-sasl-devel nc && \
+RUN dnf -y install python3 python3-devel python3-pip gcc git libpq-devel openldap-devel cyrus-sasl-devel nc && \
     dnf clean all
 
 # Create virtualenv like galaxy_ng expects
-RUN python3.11 -m venv /venv
+RUN python3 -m venv /venv
 ENV VIRTUAL_ENV=/venv
 ENV PATH="/venv/bin:$PATH"
 
