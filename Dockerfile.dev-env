@@ -58,6 +58,9 @@ COPY --from=frontend-builder /build/aap-ui ./aap-ui
 # Copy galaxy_ng source (backend runs via docker compose)
 COPY galaxy_ng ./galaxy_ng
 
+# Fake docker command so webpack proxy config doesn't crash
+RUN echo '#!/bin/sh' > /usr/local/bin/docker && echo 'exit 0' >> /usr/local/bin/docker && chmod +x /usr/local/bin/docker
+
 # Create startup script using echo commands (compatible with all builders)
 RUN echo '#!/bin/bash' > /usr/local/bin/start-hub-dev && \
     echo 'echo ""' >> /usr/local/bin/start-hub-dev && \

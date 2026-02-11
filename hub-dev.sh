@@ -194,7 +194,7 @@ build_remote() {
         build_args="$build_args --build-arg AAP_UI_REF=$aap_ui_ref"
         echo -e "  aap-ui:          ${GREEN}$aap_ui_ref${NC}"
     else
-        echo -e "  aap-ui:          ${DIM}main (default)${NC}"
+        echo -e "  aap-ui:          ${DIM}test-changes-in-parallel-hub-migration (default)${NC}"
     fi
 
     if [ -n "$galaxy_repo" ]; then

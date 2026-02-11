@@ -30,7 +30,7 @@ ARG ANSIBLE_HUB_UI_REPO=https://github.com/ansible/ansible-hub-ui.git
 ARG ANSIBLE_HUB_UI_REF=master
 
 ARG AAP_UI_REPO=https://github.com/ansible/aap-ui.git
-ARG AAP_UI_REF=main
+ARG AAP_UI_REF=test-changes-in-parallel-hub-migration
 
 ARG GALAXY_NG_REPO=https://github.com/ansible/galaxy_ng.git
 ARG GALAXY_NG_REF=main
@@ -86,6 +86,9 @@ COPY --from=frontend-builder /build/insights-chrome ./insights-chrome
 COPY --from=frontend-builder /build/ansible-hub-ui ./ansible-hub-ui
 COPY --from=frontend-builder /build/aap-ui ./aap-ui
 COPY --from=frontend-builder /build/galaxy_ng ./galaxy_ng
+
+# Fake docker command so webpack proxy config doesn't crash
+RUN echo '#!/bin/sh' > /usr/local/bin/docker && echo 'exit 0' >> /usr/local/bin/docker && chmod +x /usr/local/bin/docker
 
 # Startup info script
 RUN echo '#!/bin/bash' > /usr/local/bin/start-hub-dev && \
