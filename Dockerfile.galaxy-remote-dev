@@ -1,3 +1,4 @@
-# Extend galaxy base with dev tools
 FROM localhost/galaxy_ng/galaxy_ng:remote-base
+ENV VIRTUAL_ENV=/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install --no-cache-dir debugpy hupper ipython ipdb rpdb django-extensions pulp-cli

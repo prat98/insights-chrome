@@ -155,12 +155,12 @@ services:
     environment:
       <<: *galaxy-env
     <<: *debugging
-    command: ["bash", "-c", "/app/docker/bin/wait-for-migrations; /app/docker/bin/start-api"]
+    command: ["bash", "-c", "wait-for-migrations; start-api"]
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/automation-hub/pulp/api/v3/status/')"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/automation-hub/pulp/api/v3/status/ || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 10
+      timeout: 10s
+      retries: 20
 
   galaxy-content:
     image: "localhost/galaxy_ng/galaxy_ng:remote-dev"
@@ -179,7 +179,7 @@ services:
     environment:
       <<: *galaxy-env
     <<: *debugging
-    command: ["bash", "-c", "/app/docker/bin/wait-for-migrations; /app/docker/bin/start-content-app"]
+    command: ["bash", "-c", "wait-for-migrations; start-content-app"]
 
   galaxy-worker:
     image: "localhost/galaxy_ng/galaxy_ng:remote-dev"
@@ -198,7 +198,7 @@ services:
     environment:
       <<: *galaxy-env
     <<: *debugging
-    command: ["bash", "-c", "/app/docker/bin/wait-for-migrations; /app/docker/bin/start-worker"]
+    command: ["bash", "-c", "wait-for-migrations; start-worker"]
 
   galaxy-proxy:
     build:
