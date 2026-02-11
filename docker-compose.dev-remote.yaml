@@ -134,7 +134,7 @@ services:
       <<: *galaxy-env
     user: root
     <<: *debugging
-    command: ["bash", "-c", "set -e; echo 'Waiting for postgres...'; until python3 -c \"import socket; s=socket.socket(); s.connect(('postgres', 5432)); s.close()\" 2>/dev/null; do sleep 2; done; echo 'Postgres ready'; rm -rf /var/lib/pulp/.migrated; pulpcore-manager check --database default; pulpcore-manager migrate; pulpcore-manager shell < /app/dev/common/setup_test_data.py; pulpcore-manager createsuperuser --noinput || true; touch /var/lib/pulp/.migrated; chown -R 1000:1000 /etc/pulp /var/lib/pulp;"]
+    command: ["bash", "-c", "set -e; mkdir -p /var/lib/pulp/tmp /tmp/ansible; echo 'Waiting for postgres...'; until python3 -c \"import socket; s=socket.socket(); s.connect(('postgres', 5432)); s.close()\" 2>/dev/null; do sleep 2; done; echo 'Postgres ready'; rm -rf /var/lib/pulp/.migrated; pulpcore-manager check --database default; pulpcore-manager migrate; pulpcore-manager shell < /app/dev/common/setup_test_data.py; pulpcore-manager createsuperuser --noinput || true; touch /var/lib/pulp/.migrated; chmod -R 777 /etc/pulp /var/lib/pulp;"]
 
   galaxy-api:
     image: "localhost/galaxy_ng/galaxy_ng:remote-dev"
