@@ -22,8 +22,9 @@ FROM node:20-bookworm AS frontend-builder
 ARG GITHUB_TOKEN=""
 
 # Branch/tag/commit to checkout for each repo
-ARG INSIGHTS_CHROME_REPO=https://github.com/RedHatInsights/insights-chrome.git
-ARG INSIGHTS_CHROME_REF=master
+# Default to prat98 fork which has the dual-hub proxy config changes
+ARG INSIGHTS_CHROME_REPO=https://github.com/prat98/insights-chrome.git
+ARG INSIGHTS_CHROME_REF=AAP-61707-crc-hub-ui-local-proxy
 
 ARG ANSIBLE_HUB_UI_REPO=https://github.com/ansible/ansible-hub-ui.git
 ARG ANSIBLE_HUB_UI_REF=master

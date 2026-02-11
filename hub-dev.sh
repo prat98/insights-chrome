@@ -174,7 +174,7 @@ build_remote() {
         build_args="$build_args --build-arg INSIGHTS_CHROME_REF=$chrome_ref"
         echo -e "  insights-chrome: ${GREEN}$chrome_ref${NC}"
     else
-        echo -e "  insights-chrome: ${DIM}master (default)${NC}"
+        echo -e "  insights-chrome: ${DIM}AAP-61707-crc-hub-ui-local-proxy @ prat98/insights-chrome (default)${NC}"
     fi
 
     if [ -n "$hub_ui_repo" ]; then

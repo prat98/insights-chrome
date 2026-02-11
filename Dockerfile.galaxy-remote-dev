@@ -1,0 +1,3 @@
+# Extend galaxy base with dev tools
+FROM localhost/galaxy_ng/galaxy_ng:remote-base
+RUN pip install --no-cache-dir debugpy hupper ipython ipdb rpdb django-extensions pulp-cli

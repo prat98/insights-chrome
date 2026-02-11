@@ -1,0 +1,6 @@
+# Build galaxy proxy from source in hub-dev-env image
+FROM hub-dev-env:latest AS source
+FROM golang:alpine
+WORKDIR /app
+COPY --from=source /workspace/galaxy_ng/profiles/insights/proxy/main.go .
+CMD ["go", "run", "main.go"]

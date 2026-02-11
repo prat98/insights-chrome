@@ -104,31 +104,17 @@ services:
       interval: 5s
       retries: 10
 
-  # Build galaxy_ng base image from the cloned source inside hub-dev-env
-  galaxy-base:
-    image: hub-dev-env:latest
-    entrypoint: ["bash", "-c", "echo 'Source available at /workspace/galaxy_ng'"]
-
+  # Build galaxy_ng from source that was cloned into hub-dev-env image
   galaxy-base-img:
     build:
       context: .
-      dockerfile_inline: |
-        FROM hub-dev-env:latest AS source
-        FROM python:3.11-slim
-        RUN apt-get update && apt-get install -y gcc libpq-dev git && rm -rf /var/lib/apt/lists/*
-        COPY --from=source /workspace/galaxy_ng /app
-        WORKDIR /app
-        RUN pip install --no-cache-dir -e .
+      dockerfile: Dockerfile.galaxy-remote-base
     image: "localhost/galaxy_ng/galaxy_ng:remote-base"
-    depends_on:
-      - galaxy-base
 
   galaxy-img:
     build:
       context: .
-      dockerfile_inline: |
-        FROM localhost/galaxy_ng/galaxy_ng:remote-base
-        RUN pip install --no-cache-dir debugpy hupper ipython ipdb rpdb django-extensions pulp-cli
+      dockerfile: Dockerfile.galaxy-remote-dev
     image: "localhost/galaxy_ng/galaxy_ng:remote-dev"
     depends_on:
       galaxy-base-img:
@@ -217,12 +203,7 @@ services:
   galaxy-proxy:
     build:
       context: .
-      dockerfile_inline: |
-        FROM hub-dev-env:latest AS source
-        FROM golang:alpine
-        WORKDIR /app
-        COPY --from=source /workspace/galaxy_ng/profiles/insights/proxy/main.go .
-        CMD ["go", "run", "main.go"]
+      dockerfile: Dockerfile.galaxy-remote-proxy
     depends_on:
       galaxy-api:
         condition: service_healthy
