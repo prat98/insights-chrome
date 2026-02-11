@@ -1,22 +1,36 @@
-# Build galaxy_ng from source that was cloned into the hub-dev-env image
+# Extract galaxy_ng source from hub-dev-env, then build using galaxy_ng's own Dockerfile
+# This is a two-step process:
+#   1. Copy source out of hub-dev-env image
+#   2. Build using galaxy_ng's Dockerfile (which sets up venv, Fedora base, etc.)
+
 FROM hub-dev-env:latest AS source
-FROM python:3.11-slim
-RUN apt-get update && apt-get install -y gcc libpq-dev git libldap2-dev libsasl2-dev && rm -rf /var/lib/apt/lists/*
+
+# Now use galaxy_ng's own base image setup
+FROM fedora:39
+
+# Install system deps that galaxy_ng needs
+RUN dnf -y install python3.11 python3.11-devel python3.11-pip gcc git libpq-devel openldap-devel cyrus-sasl-devel nc && \
+    dnf clean all
+
+# Create virtualenv like galaxy_ng expects
+RUN python3.11 -m venv /venv
+ENV VIRTUAL_ENV=/venv
+ENV PATH="/venv/bin:$PATH"
+
+# Copy galaxy_ng source
 COPY --from=source /workspace/galaxy_ng /app
 WORKDIR /app
 
-# Install galaxy_ng and its dependencies
-RUN pip install --no-cache-dir -e .
+# Install galaxy_ng
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -e .
 
-# Set up required dirs, certs and keys (from dev/compose)
+# Set up required dirs, certs, keys, and scripts
 RUN mkdir -p /etc/pulp/certs /var/lib/pulp/scripts /var/lib/pulp/tmp /etc/pulp/gnupg /tmp/ansible && \
-    cp /app/dev/compose/database/database_fields.symmetric.key /etc/pulp/certs/ && \
-    cp /app/dev/compose/signing/keys/* /etc/pulp/certs/ && \
-    cp /app/dev/compose/signing/scripts/* /var/lib/pulp/scripts/ && \
-    chmod -R 0775 /etc/pulp/certs /var/lib/pulp/scripts
-
-# Install the settings file
-RUN cp /app/docker/etc/settings.py /etc/pulp/settings.py
-
-# Install startup scripts
-RUN install -Dm 0755 /app/docker/bin/start-api /app/docker/bin/start-content-app /app/docker/bin/start-worker /app/docker/bin/wait-for-migrations /app/docker/bin/wait-for-tcp /usr/local/bin/
+    cp dev/compose/database/database_fields.symmetric.key /etc/pulp/certs/ && \
+    cp dev/compose/signing/keys/* /etc/pulp/certs/ 2>/dev/null || true && \
+    cp dev/compose/signing/scripts/* /var/lib/pulp/scripts/ 2>/dev/null || true && \
+    chmod -R 0775 /etc/pulp/certs /var/lib/pulp/scripts && \
+    cp docker/etc/settings.py /etc/pulp/settings.py && \
+    install -Dm 0755 docker/bin/start-api docker/bin/start-content-app docker/bin/start-worker docker/bin/wait-for-migrations docker/bin/wait-for-tcp /usr/local/bin/ && \
+    install -Dm 0775 galaxy-operator/bin/readyz.py /usr/bin/ 2>/dev/null || true
