@@ -83,9 +83,29 @@ const nonKonfluxDevServerConfiguration = () => {
     isChrome: true,
     frontendCRDPath: path.resolve(__dirname, '../frontend.yml'),
     routes: {
-      // Local Hub development - proxy to local vite build
+      // Local Hub development - aap-ui (new) on port 8003
+      // IMPORTANT: Must come BEFORE /apps/automation-hub since it uses includes() matching
+      '/apps/automation-hub-new': {
+        host: `http://${process.env.HUB_NEW_HOST || 'localhost'}:8003`,
+      },
+      // Local Hub development - ansible-hub-ui (old) on port 8002
       '/apps/automation-hub': {
-        host: 'http://localhost:8002',
+        host: `http://${process.env.HUB_OLD_HOST || 'localhost'}:8002`,
+      },
+      '/beta/apps/automation-hub': {
+        host: `http://${process.env.HUB_OLD_HOST || 'localhost'}:8002`,
+      },
+      // API proxy to local galaxy_ng
+      '/api/automation-hub': {
+        host: `http://${process.env.GALAXY_PROXY_HOST || 'localhost'}:8080`,
+      },
+      // Local Automation Analytics development
+      '/apps/automation-analytics': {
+        host: 'https://localhost:8003',
+      },
+      // Local Ansible Dashboard development
+      '/apps/ansible-dashboard': {
+        host: 'https://localhost:8004',
       },
       ...(process.env.CHROME_SERVICE && {
         // web sockets
@@ -109,7 +129,7 @@ const nonKonfluxDevServerConfiguration = () => {
       }),
       ...(process.env.NAV_CONFIG && {
         '/api/chrome-service/v1/static': {
-          host: `http://localhost:${process.env.NAV_CONFIG}`,
+          host: `http://${process.env.NAV_CONFIG_HOST || 'localhost'}:${process.env.NAV_CONFIG}`,
         },
       }),
     },

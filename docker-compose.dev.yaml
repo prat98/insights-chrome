@@ -1,0 +1,383 @@
+# Docker Compose for Full Dual-Hub Development Stack
+#
+# This compose file orchestrates the entire local development environment:
+# - galaxy_ng backend (API, content, worker, postgres, redis)
+# - ansible-hub-ui frontend (old UI on port 8002)
+# - aap-ui frontend (new UI on port 8003)
+# - insights-chrome with proxy
+# - local-config-proxy for navigation injection
+#
+# Usage:
+#   # Start everything (first time - builds images)
+#   docker compose -f docker-compose.dev.yaml up --build
+#
+#   # Start everything (subsequent runs)
+#   docker compose -f docker-compose.dev.yaml up
+#
+#   # Start only backend (run frontends manually with npm)
+#   docker compose -f docker-compose.dev.yaml up galaxy-proxy postgres redis
+#
+#   # Tail logs
+#   docker compose -f docker-compose.dev.yaml logs -f
+#
+#   # Stop everything
+#   docker compose -f docker-compose.dev.yaml down
+#
+# Prerequisites:
+#   - /etc/hosts: 127.0.0.1 stage.foo.redhat.com prod.foo.redhat.com
+#   - Clone repos in same parent directory: galaxy_ng, ansible-hub-ui, aap-ui, insights-chrome
+#
+# After startup, access:
+#   - Old Hub: https://stage.foo.redhat.com:1337/ansible/automation-hub
+#   - New Hub: https://stage.foo.redhat.com:1337/ansible/automation-hub-new
+
+version: "3.8"
+
+x-galaxy-common-env: &galaxy-common-env
+  GNUPGHOME: /etc/pulp/gnupg/
+  GALAXY_IMPORTER_CONFIG: /src/galaxy_ng/profiles/insights/galaxy-importer/galaxy-importer.cfg
+  DJANGO_SUPERUSER_USERNAME: admin
+  DJANGO_SUPERUSER_EMAIL: admin@example.com
+  DJANGO_SUPERUSER_PASSWORD: admin
+  POSTGRES_USER: galaxy_ng
+  POSTGRES_PASSWORD: galaxy_ng
+  POSTGRES_DB: galaxy_ng
+  PULP_CACHE_ENABLED: 'true'
+  PULP_REDIS_HOST: redis
+  REDIS_SERVICE_HOST: redis
+  PULP_REDIS_PORT: 6379
+  PULP_REDIS_PASSWORD: ""
+  PULP_ANALYTICS: 'false'
+  PULP_DATABASES__default__ENGINE: django.db.backends.postgresql
+  PULP_DATABASES__default__NAME: galaxy_ng
+  PULP_DATABASES__default__USER: galaxy_ng
+  PULP_DATABASES__default__PASSWORD: galaxy_ng
+  PULP_DATABASES__default__HOST: postgres
+  PULP_DATABASES__default__PORT: 5432
+  PULP_DEBUG: 1
+  PULP_GALAXY_DEPLOYMENT_MODE: 'insights'
+  PULP_RH_ENTITLEMENT_REQUIRED: 'insights'
+  PULP_DEFAULT_FILE_STORAGE: "pulpcore.app.models.storage.FileSystem"
+  PULP_REDIRECT_TO_OBJECT_STORAGE: 'false'
+  PULP_X_PULP_CONTENT_HOST: galaxy-content
+  PULP_X_PULP_CONTENT_PORT: 24816
+  PULP_GALAXY_API_PATH_PREFIX: '/api/automation-hub/'
+  PULP_CONTENT_PATH_PREFIX: '/api/automation-hub/pulp/content/'
+  PULP_ANSIBLE_API_HOSTNAME: 'http://localhost:8080'
+  PULP_ANSIBLE_CONTENT_HOSTNAME: "http://localhost:8080"
+  PULP_CONTENT_ORIGIN: "http://localhost:8080"
+  PULP_CSRF_TRUSTED_ORIGINS: "['https://localhost']"
+  PULP_ALLOWED_EXPORT_PATHS: /app/tmp
+  PULP_ALLOWED_IMPORT_PATHS: /app/tmp
+  PULP_GALAXY_AUTHENTICATION_CLASSES: "['galaxy_ng.app.auth.auth.RHIdentityAuthentication']"
+  PULP_GALAXY_FEATURE_FLAGS__dab_resource_registry: 'false'
+  PULP_GALAXY_REQUIRE_CONTENT_APPROVAL: 'true'
+  PULP_GALAXY_AUTO_SIGN_COLLECTIONS: 'false'
+  PULP_GALAXY_REQUIRE_SIGNATURE_FOR_APPROVAL: 'false'
+  GALAXY_REQUIRE_SIGNATURE_FOR_APPROVAL: 'false'
+  ENABLE_COLLECTION_SIGNING: 0
+  PULP_RESOURCE_SERVER_SYNC_ENABLED: 'false'
+  PULP_GALAXY_API_SPEC_REQUIRE_AUTHENTICATION: 'false'
+  HUB_AUTH_URL: 'http://localhost:8080/auth/realms/redhat-external/protocol/openid-connect/token'
+  HUB_API_ROOT: 'http://localhost:8080/api/automation-hub/'
+  HUB_USE_MOVE_ENDPOINT: "true"
+  GALAXY_IMPORTER_ANSIBLE_LOCAL_TMP: '/tmp/ansible'
+  HUB_LOCAL: 0
+  HUB_TEST_MARKS: deployment_cloud or all
+  LOCK_REQUIREMENTS: 0
+  DEV_SOURCE_PATH: ${DEV_SOURCE_PATH:-}
+  ENABLE_DEBUGPY: ${ENABLE_DEBUGPY:-}
+
+x-debugging: &debugging
+  stdin_open: true
+  tty: true
+
+services:
+  #############################################################################
+  # GALAXY_NG BACKEND SERVICES
+  #############################################################################
+  
+  postgres:
+    image: "postgres:13"
+    ports:
+      - '5433:5432'
+    environment:
+      <<: *galaxy-common-env
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "galaxy_ng"]
+      interval: 10s
+      retries: 5
+    volumes:
+      - "pg_data:/var/lib/postgresql/data"
+
+  redis:
+    image: "redis:5"
+    environment:
+      <<: *galaxy-common-env
+    ports:
+      - "6379:6379"
+    volumes:
+      - "redis_data:/data"
+    healthcheck:
+      test: redis-cli ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  galaxy-base:
+    build:
+      context: ../galaxy_ng
+      dockerfile: Dockerfile
+      args:
+        USER_ID: "${USER_ID:-1000}"
+    image: "localhost/galaxy_ng/galaxy_ng:base"
+
+  galaxy-base-dev:
+    depends_on:
+      - galaxy-base
+    build:
+      context: ../galaxy_ng/dev/compose
+      dockerfile: Dockerfile.dev
+      args:
+        <<: *galaxy-common-env
+      additional_contexts:
+        base_img: service:galaxy-base
+    image: "localhost/galaxy_ng/galaxy_ng:dev"
+
+  galaxy-migrations:
+    image: "localhost/galaxy_ng/galaxy_ng:dev"
+    depends_on:
+      galaxy-base-dev:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    volumes:
+      - "etc_pulp_certs:/etc/pulp/certs"
+      - "var_lib_pulp:/var/lib/pulp"
+      - "../:/src"
+      - "../galaxy_ng:/app"
+    environment:
+      <<: *galaxy-common-env
+    user: root
+    <<: *debugging
+    command: |
+      bash -c "
+        set -e;
+        rm -rf /var/lib/pulp/.migrated;
+        /src/galaxy_ng/dev/compose/bin/devinstall;
+        pulpcore-manager check --database default;
+        pulpcore-manager migrate;
+        pulpcore-manager shell < /src/galaxy_ng/dev/common/setup_test_data.py;
+        pulpcore-manager createsuperuser --noinput || true;
+        touch /var/lib/pulp/.migrated;
+        chown -R galaxy:galaxy /etc/pulp /var/lib/pulp;
+      "
+
+  galaxy-api:
+    image: "localhost/galaxy_ng/galaxy_ng:dev"
+    depends_on:
+      galaxy-base-dev:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      galaxy-migrations:
+        condition: service_completed_successfully
+    volumes:
+      - "etc_pulp_certs:/etc/pulp/certs"
+      - "var_lib_pulp:/var/lib/pulp"
+      - "../:/src"
+      - "../galaxy_ng:/app"
+    ports:
+      - '5677:5677'
+    environment:
+      <<: *galaxy-common-env
+    extra_hosts:
+      localhost: "host-gateway"
+    networks:
+      - default
+      - service-mesh
+    user: galaxy
+    <<: *debugging
+    command: |
+      bash -c "
+        /src/galaxy_ng/dev/compose/bin/devinstall;
+        /src/galaxy_ng/dev/compose/bin/wait /var/lib/pulp/.migrated;
+        /src/galaxy_ng/dev/compose/bin/reloader start-api
+      "
+    healthcheck:
+      test: readyz.py $${PULP_GALAXY_API_PATH_PREFIX}pulp/api/v3/status/
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  galaxy-content:
+    image: "localhost/galaxy_ng/galaxy_ng:dev"
+    depends_on:
+      galaxy-base-dev:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      galaxy-migrations:
+        condition: service_completed_successfully
+    volumes:
+      - "etc_pulp_certs:/etc/pulp/certs"
+      - "var_lib_pulp:/var/lib/pulp"
+      - "../:/src"
+      - "../galaxy_ng:/app"
+    ports:
+      - '5678:5678'
+    environment:
+      <<: *galaxy-common-env
+    extra_hosts:
+      localhost: "host-gateway"
+    networks:
+      - default
+      - service-mesh
+    user: galaxy
+    <<: *debugging
+    command: |
+      bash -c "
+        /src/galaxy_ng/dev/compose/bin/devinstall;
+        /src/galaxy_ng/dev/compose/bin/wait /var/lib/pulp/.migrated;
+        /src/galaxy_ng/dev/compose/bin/reloader start-content-app
+      "
+    healthcheck:
+      test: readyz.py $${PULP_CONTENT_PATH_PREFIX}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  galaxy-worker:
+    image: "localhost/galaxy_ng/galaxy_ng:dev"
+    deploy:
+      replicas: 1
+    depends_on:
+      galaxy-base-dev:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      galaxy-migrations:
+        condition: service_completed_successfully
+    volumes:
+      - "etc_pulp_certs:/etc/pulp/certs"
+      - "var_lib_pulp:/var/lib/pulp"
+      - "../:/src"
+      - "../galaxy_ng:/app"
+    ports:
+      - '5679:5679'
+    environment:
+      <<: *galaxy-common-env
+    user: galaxy
+    <<: *debugging
+    command: |
+      bash -c "
+        /src/galaxy_ng/dev/compose/bin/devinstall;
+        /src/galaxy_ng/dev/compose/bin/wait /var/lib/pulp/.migrated;
+        gpg --list-secret-keys;
+        ENTRYPOINT=/venv/bin/pulpcore-worker /src/galaxy_ng/dev/compose/bin/reloader start-worker
+      "
+
+  galaxy-proxy:
+    build:
+      context: ../galaxy_ng/profiles/insights/proxy
+    ports:
+      - "8080:8080"
+    environment:
+      UPSTREAM_URL: "http://galaxy-api:8000"
+      PROXY_PORT: "8080"
+    volumes:
+      - "../galaxy_ng/profiles/insights/proxy:/app:ro"
+    depends_on:
+      galaxy-api:
+        condition: service_healthy
+
+  #############################################################################
+  # FRONTEND SERVICES
+  #############################################################################
+
+  # Config proxy that injects automation-hub-new into chrome config
+  config-proxy:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ".:/app:ro"
+    ports:
+      - "9000:9000"
+    command: node local-config-proxy.js
+    environment:
+      CONFIG_PROXY_PORT: 9000
+
+  # ansible-hub-ui (old frontend) on port 8002
+  ansible-hub-ui:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - "../ansible-hub-ui:/app"
+      - "ansible_hub_ui_node_modules:/app/node_modules"
+    ports:
+      - "8002:8002"
+    command: >
+      sh -c "
+        npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
+        npm run start-insights
+      "
+    environment:
+      NODE_ENV: development
+    depends_on:
+      galaxy-proxy:
+        condition: service_started
+    profiles:
+      - frontends
+
+  # aap-ui (new frontend) on port 8003
+  aap-ui:
+    image: node:20
+    working_dir: /app/frontend/hub/insights
+    volumes:
+      - "../aap-ui:/app"
+      - "aap_ui_node_modules:/app/node_modules"
+      - "aap_ui_insights_node_modules:/app/frontend/hub/insights/node_modules"
+    ports:
+      - "8003:8003"
+    command: >
+      sh -c "
+        cd /app && npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
+        npm install --legacy-peer-deps
+        APP_NAME=automation-hub-new UI_PORT=8003 npm start
+      "
+    environment:
+      NODE_ENV: development
+      APP_NAME: automation-hub-new
+      UI_PORT: 8003
+    depends_on:
+      galaxy-proxy:
+        condition: service_started
+    profiles:
+      - frontends
+
+volumes:
+  var_lib_pulp:
+    name: hub_dev_var_lib_pulp
+  etc_pulp_certs:
+    name: hub_dev_etc_pulp_certs
+  redis_data:
+    name: hub_dev_redis_data
+  pg_data:
+    name: hub_dev_pg_data
+  ansible_hub_ui_node_modules:
+    name: hub_dev_ansible_hub_ui_nm
+  aap_ui_node_modules:
+    name: hub_dev_aap_ui_nm
+  aap_ui_insights_node_modules:
+    name: hub_dev_aap_ui_insights_nm
+
+networks:
+  service-mesh:
+    name: hub-dev-service-mesh
+

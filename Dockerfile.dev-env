@@ -1,0 +1,82 @@
+# Hub Development Environment - All-in-One Image
+#
+# This Dockerfile creates a complete development environment with:
+# - galaxy_ng backend (Django/Pulp)
+# - ansible-hub-ui frontend
+# - aap-ui frontend  
+# - insights-chrome
+# - All dependencies pre-installed
+#
+# Build:
+#   podman build -t hub-dev-env:latest -f Dockerfile.dev-env ..
+#
+# Run:
+#   podman compose -f docker-compose.dev-image.yaml up --build
+#
+
+# =============================================================================
+# Stage 1: Frontend Builder
+# =============================================================================
+FROM node:20-bookworm AS frontend-builder
+
+WORKDIR /build
+
+# Copy all source code first (aap-ui is a monorepo with workspaces)
+COPY insights-chrome ./insights-chrome
+COPY ansible-hub-ui ./ansible-hub-ui
+COPY aap-ui ./aap-ui
+
+# Install dependencies - use npm install (more forgiving than npm ci)
+RUN cd insights-chrome && npm install --legacy-peer-deps
+RUN cd insights-chrome && npm install marked @patternfly/react-drag-drop --legacy-peer-deps
+RUN cd ansible-hub-ui && npm install --legacy-peer-deps
+RUN cd aap-ui && npm install --legacy-peer-deps
+RUN cd aap-ui/frontend/hub/insights && npm install --legacy-peer-deps
+
+# =============================================================================
+# Stage 2: Final Development Image
+# =============================================================================
+FROM node:20-bookworm
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    tmux \
+    vim \
+    curl \
+    git \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create workspace
+WORKDIR /workspace
+
+# Copy frontend code with node_modules
+COPY --from=frontend-builder /build/insights-chrome ./insights-chrome
+COPY --from=frontend-builder /build/ansible-hub-ui ./ansible-hub-ui
+COPY --from=frontend-builder /build/aap-ui ./aap-ui
+
+# Copy galaxy_ng source (backend runs via docker compose)
+COPY galaxy_ng ./galaxy_ng
+
+# Create startup script using echo commands (compatible with all builders)
+RUN echo '#!/bin/bash' > /usr/local/bin/start-hub-dev && \
+    echo 'echo ""' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "Hub Development Environment"' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "=========================="' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo ""' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "All code and dependencies are pre-installed."' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo ""' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "Access URLs:"' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "  Old Hub: https://stage.foo.redhat.com:1337/ansible/automation-hub"' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "  New Hub: https://stage.foo.redhat.com:1337/ansible/automation-hub-new"' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo ""' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "Credentials: org-admin / redhat  or  jdoe / redhat"' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo ""' >> /usr/local/bin/start-hub-dev && \
+    echo 'exec /bin/bash' >> /usr/local/bin/start-hub-dev && \
+    chmod +x /usr/local/bin/start-hub-dev
+
+# Expose ports
+EXPOSE 1337 8002 8003 8080 9000
+
+# Set default command
+CMD ["start-hub-dev"]

@@ -1,0 +1,107 @@
+# Hub Development Environment - Built entirely from remote repos
+#
+# This Dockerfile clones all repos and builds everything from scratch.
+# No local repos needed.
+#
+# Build:
+#   podman build -t hub-dev-env:latest -f Dockerfile.dev-env-remote .
+#
+# Customize branches/commits via build args:
+#   podman build -t hub-dev-env:latest -f Dockerfile.dev-env-remote \
+#     --build-arg INSIGHTS_CHROME_REF=my-branch \
+#     --build-arg AAP_UI_REF=feature-xyz \
+#     .
+#
+
+# =============================================================================
+# Stage 1: Clone repos and install frontend dependencies
+# =============================================================================
+FROM node:20-bookworm AS frontend-builder
+
+# GitHub token for private repos (optional - pass via --secret or --build-arg)
+ARG GITHUB_TOKEN=""
+
+# Branch/tag/commit to checkout for each repo
+ARG INSIGHTS_CHROME_REPO=https://github.com/RedHatInsights/insights-chrome.git
+ARG INSIGHTS_CHROME_REF=master
+
+ARG ANSIBLE_HUB_UI_REPO=https://github.com/ansible/ansible-hub-ui.git
+ARG ANSIBLE_HUB_UI_REF=master
+
+ARG AAP_UI_REPO=https://github.com/ansible/aap-ui.git
+ARG AAP_UI_REF=main
+
+ARG GALAXY_NG_REPO=https://github.com/ansible/galaxy_ng.git
+ARG GALAXY_NG_REF=main
+
+WORKDIR /build
+
+# Configure git auth if token provided
+RUN if [ -n "$GITHUB_TOKEN" ]; then \
+      git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; \
+    fi
+
+# Clone all repos
+RUN echo "Cloning insights-chrome @ ${INSIGHTS_CHROME_REF}..." && \
+    git clone --depth 1 --branch ${INSIGHTS_CHROME_REF} ${INSIGHTS_CHROME_REPO} insights-chrome || \
+    (git clone ${INSIGHTS_CHROME_REPO} insights-chrome && cd insights-chrome && git checkout ${INSIGHTS_CHROME_REF})
+
+RUN echo "Cloning ansible-hub-ui @ ${ANSIBLE_HUB_UI_REF}..." && \
+    git clone --depth 1 --branch ${ANSIBLE_HUB_UI_REF} ${ANSIBLE_HUB_UI_REPO} ansible-hub-ui || \
+    (git clone ${ANSIBLE_HUB_UI_REPO} ansible-hub-ui && cd ansible-hub-ui && git checkout ${ANSIBLE_HUB_UI_REF})
+
+RUN echo "Cloning aap-ui @ ${AAP_UI_REF}..." && \
+    git clone --depth 1 --branch ${AAP_UI_REF} ${AAP_UI_REPO} aap-ui || \
+    (git clone ${AAP_UI_REPO} aap-ui && cd aap-ui && git checkout ${AAP_UI_REF})
+
+RUN echo "Cloning galaxy_ng @ ${GALAXY_NG_REF}..." && \
+    git clone --depth 1 --branch ${GALAXY_NG_REF} ${GALAXY_NG_REPO} galaxy_ng || \
+    (git clone ${GALAXY_NG_REPO} galaxy_ng && cd galaxy_ng && git checkout ${GALAXY_NG_REF})
+
+# Remove git credentials from image
+RUN git config --global --unset-all url.https://.insteadOf 2>/dev/null || true && \
+    rm -f ~/.gitconfig
+
+# Install frontend dependencies
+RUN cd insights-chrome && npm install --legacy-peer-deps
+RUN cd insights-chrome && npm install marked @patternfly/react-drag-drop --legacy-peer-deps
+RUN cd ansible-hub-ui && npm install --legacy-peer-deps
+RUN cd aap-ui && npm install --legacy-peer-deps
+RUN cd aap-ui/frontend/hub/insights && npm install --legacy-peer-deps
+
+# =============================================================================
+# Stage 2: Final image
+# =============================================================================
+FROM node:20-bookworm
+
+RUN apt-get update && apt-get install -y \
+    tmux vim curl git jq \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Copy everything with deps installed
+COPY --from=frontend-builder /build/insights-chrome ./insights-chrome
+COPY --from=frontend-builder /build/ansible-hub-ui ./ansible-hub-ui
+COPY --from=frontend-builder /build/aap-ui ./aap-ui
+COPY --from=frontend-builder /build/galaxy_ng ./galaxy_ng
+
+# Startup info script
+RUN echo '#!/bin/bash' > /usr/local/bin/start-hub-dev && \
+    echo 'echo ""' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "Hub Development Environment"' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "=========================="' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo ""' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "All code and dependencies are pre-installed."' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo ""' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "Access URLs:"' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "  Old Hub: https://prod.foo.redhat.com:1337/ansible/automation-hub"' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "  New Hub: https://prod.foo.redhat.com:1337/ansible/automation-hub-new"' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo ""' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo "Credentials: org-admin / redhat  or  jdoe / redhat"' >> /usr/local/bin/start-hub-dev && \
+    echo 'echo ""' >> /usr/local/bin/start-hub-dev && \
+    echo 'exec /bin/bash' >> /usr/local/bin/start-hub-dev && \
+    chmod +x /usr/local/bin/start-hub-dev
+
+EXPOSE 1337 8002 8003 8080 9000
+CMD ["start-hub-dev"]

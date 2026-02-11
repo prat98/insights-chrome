@@ -1,0 +1,16 @@
+{
+  "automationHubNew": {
+    "manifestLocation": "/apps/automation-hub-new/fed-mods.json",
+    "modules": [
+      {
+        "id": "automationHubNew",
+        "module": "./RootApp",
+        "routes": [
+          {
+            "pathname": "/ansible/automation-hub-new"
+          }
+        ]
+      }
+    ]
+  }
+}
