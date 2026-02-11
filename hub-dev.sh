@@ -204,7 +204,7 @@ build_remote() {
         build_args="$build_args --build-arg GALAXY_NG_REF=$galaxy_ref"
         echo -e "  galaxy_ng:       ${GREEN}$galaxy_ref${NC}"
     else
-        echo -e "  galaxy_ng:       ${DIM}main (default)${NC}"
+        echo -e "  galaxy_ng:       ${DIM}proxy-setup @ prat98/galaxy_ng (default)${NC}"
     fi
 
     echo ""
@@ -222,9 +222,13 @@ build_remote() {
 
 cmd_start() {
     local compose_file="$LOCAL_COMPOSE"
-    if [[ "$1" == "--remote" ]]; then
-        compose_file="$REMOTE_COMPOSE"
-    fi
+    local dev_mode=false
+    for arg in "$@"; do
+        case $arg in
+            --remote) compose_file="$REMOTE_COMPOSE" ;;
+            --dev)    dev_mode=true ;;
+        esac
+    done
 
     header
     check_hosts
@@ -239,7 +243,12 @@ cmd_start() {
 
     echo "Starting all services..."
     cd "$SCRIPT_DIR"
-    $COMPOSE -f "$compose_file" up --build -d
+    if [ "$dev_mode" = true ]; then
+        echo -e "${GREEN}Dev mode: mounting local aap-ui for hot-reload${NC}"
+        $COMPOSE -f "$compose_file" -f "$SCRIPT_DIR/docker-compose.dev-override.yaml" up --build -d
+    else
+        $COMPOSE -f "$compose_file" up --build -d
+    fi
 
     echo ""
     echo -e "${GREEN}${BOLD}Services starting!${NC}"
@@ -369,6 +378,7 @@ cmd_help() {
     echo "  build                     Build from local repos"
     echo "  build --remote            Build from GitHub (no local repos needed)"
     echo "  start                     Start all services"
+    echo "  start --dev               Start with local aap-ui mounted for hot-reload"
     echo "  stop                      Stop all services"
     echo "  status                    Show service status and health"
     echo "  logs [service]            Tail logs (chrome, hub, aap, api, proxy, config)"

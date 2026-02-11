@@ -1,0 +1,39 @@
+# Hot-reload override - mount local source directories for live development
+#
+# Usage:
+#   ./hub-dev.sh start --dev
+#
+# This mounts your local aap-ui source into the container so webpack
+# watches for changes and hot-reloads automatically.
+#
+# You can also mount other repos by uncommenting the sections below.
+
+services:
+  aap-ui:
+    environment:
+      # Enable webpack polling for file watching through Podman VM mounts
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      # Mount local source for hot-reload, but keep the image's insights/ build config
+      # (webpack.config.cjs, package.json, node_modules) intact
+      - ../aap-ui/frontend/hub/access:/workspace/aap-ui/frontend/hub/access
+      - ../aap-ui/frontend/hub/administration:/workspace/aap-ui/frontend/hub/administration
+      - ../aap-ui/frontend/hub/collections:/workspace/aap-ui/frontend/hub/collections
+      - ../aap-ui/frontend/hub/common:/workspace/aap-ui/frontend/hub/common
+      - ../aap-ui/frontend/hub/execution-environments:/workspace/aap-ui/frontend/hub/execution-environments
+      - ../aap-ui/frontend/hub/namespaces:/workspace/aap-ui/frontend/hub/namespaces
+      - ../aap-ui/frontend/hub/remotes:/workspace/aap-ui/frontend/hub/remotes
+      - ../aap-ui/frontend/common:/workspace/aap-ui/frontend/common
+      - ../aap-ui/framework:/workspace/aap-ui/framework
+
+  # Uncomment to also hot-reload ansible-hub-ui:
+  # ansible-hub-ui:
+  #   volumes:
+  #     - ../ansible-hub-ui/src:/workspace/ansible-hub-ui/src
+
+  # Uncomment to also hot-reload insights-chrome:
+  # insights-chrome:
+  #   volumes:
+  #     - ./src:/workspace/insights-chrome/src
+  #     - ./config:/workspace/insights-chrome/config

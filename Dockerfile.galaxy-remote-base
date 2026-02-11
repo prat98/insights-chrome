@@ -7,7 +7,7 @@ RUN cp -r /workspace/galaxy_ng /tmp/galaxy_ng_src
 
 # Now build galaxy_ng using its own Dockerfile instructions
 # (copied from galaxy_ng/Dockerfile to avoid needing local files)
-FROM quay.io/fedora/fedora:39 AS galaxy-builder
+FROM quay.io/fedora/fedora:40 AS galaxy-builder
 
 ARG USER_ID=1000
 ENV VIRTUAL_ENV=/venv
