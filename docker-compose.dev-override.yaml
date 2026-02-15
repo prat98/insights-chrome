@@ -2,11 +2,11 @@
 #
 # Usage:
 #   ./hub-dev.sh start --dev
+#   ./hub-dev.sh start --remote --dev
 #
-# This mounts your local aap-ui source into the container so webpack
+# Mounts your local aap-ui source into the container so webpack
 # watches for changes and hot-reloads automatically.
-#
-# You can also mount other repos by uncommenting the sections below.
+# The insights/ build config (webpack, node_modules) stays from the image.
 
 services:
   aap-ui:
@@ -15,15 +15,17 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
     volumes:
-      # Mount local source for hot-reload, but keep the image's insights/ build config
-      # (webpack.config.cjs, package.json, node_modules) intact
-      - ../aap-ui/frontend/hub/access:/workspace/aap-ui/frontend/hub/access
-      - ../aap-ui/frontend/hub/administration:/workspace/aap-ui/frontend/hub/administration
-      - ../aap-ui/frontend/hub/collections:/workspace/aap-ui/frontend/hub/collections
-      - ../aap-ui/frontend/hub/common:/workspace/aap-ui/frontend/hub/common
-      - ../aap-ui/frontend/hub/execution-environments:/workspace/aap-ui/frontend/hub/execution-environments
-      - ../aap-ui/frontend/hub/namespaces:/workspace/aap-ui/frontend/hub/namespaces
-      - ../aap-ui/frontend/hub/remotes:/workspace/aap-ui/frontend/hub/remotes
+      # Mount all hub source code
+      - ../aap-ui/frontend/hub:/workspace/aap-ui/frontend/hub
+      # But override insights/ back from the image (preserves webpack config + node_modules)
+      # This is done by creating a named volume that was populated from the image on first run
+      - hub_insights_config:/workspace/aap-ui/frontend/hub/insights
+      # Mount insights source files from local on top of the named volume
+      # so that changes to these files are hot-reloaded during development
+      - ../aap-ui/frontend/hub/insights/HubRoot.tsx:/workspace/aap-ui/frontend/hub/insights/HubRoot.tsx
+      - ../aap-ui/frontend/hub/insights/HubInsightsApp.tsx:/workspace/aap-ui/frontend/hub/insights/HubInsightsApp.tsx
+      - ../aap-ui/frontend/hub/insights/awx-stub.ts:/workspace/aap-ui/frontend/hub/insights/awx-stub.ts
+      # Also mount common and framework
       - ../aap-ui/frontend/common:/workspace/aap-ui/frontend/common
       - ../aap-ui/framework:/workspace/aap-ui/framework
 
@@ -37,3 +39,7 @@ services:
   #   volumes:
   #     - ./src:/workspace/insights-chrome/src
   #     - ./config:/workspace/insights-chrome/config
+
+volumes:
+  hub_insights_config:
+    name: hub_dev_insights_config

@@ -19,24 +19,24 @@ COPY --from=extractor /tmp/galaxy_ng_src /app
 WORKDIR /app
 
 RUN dnf -y install python3 python3-devel python3-pip gcc git libpq-devel openldap-devel \
-    cyrus-sasl-devel nc curl gpgme-devel && dnf clean all && \
-    python3 -m venv /venv && \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -e . && \
-    pip install --no-cache-dir gunicorn
+  cyrus-sasl-devel nc curl gpgme-devel && dnf clean all && \
+  python3 -m venv /venv && \
+  pip install --no-cache-dir --upgrade pip setuptools wheel && \
+  pip install --no-cache-dir -e . && \
+  pip install --no-cache-dir gunicorn
 
 # Set up certs, keys, scripts, settings
 RUN mkdir -p /etc/pulp/certs /var/lib/pulp/scripts /var/lib/pulp/tmp /etc/pulp/gnupg /tmp/ansible && \
-    cp dev/compose/database/database_fields.symmetric.key /etc/pulp/certs/ && \
-    (cp dev/compose/signing/keys/* /etc/pulp/certs/ 2>/dev/null || true) && \
-    (cp dev/compose/signing/scripts/* /var/lib/pulp/scripts/ 2>/dev/null || true) && \
-    chmod -R 0775 /etc/pulp /var/lib/pulp && \
-    cp docker/etc/settings.py /etc/pulp/settings.py && \
-    install -Dm 0755 docker/bin/start-api docker/bin/start-content-app docker/bin/start-worker \
-        docker/bin/wait-for-migrations docker/bin/wait-for-tcp /usr/local/bin/ && \
-    (install -Dm 0775 galaxy-operator/bin/readyz.py /usr/bin/ 2>/dev/null || true) && \
-    install -Dm 0644 docker/etc/settings.py /etc/pulp/settings.py && \
-    (install -Dm 0644 ansible.cfg /etc/ansible/ansible.cfg 2>/dev/null || true) && \
-    install -Dm 0755 docker/entrypoint.sh /entrypoint.sh
+  cp dev/compose/database/database_fields.symmetric.key /etc/pulp/certs/ && \
+  (cp dev/compose/signing/keys/* /etc/pulp/certs/ 2>/dev/null || true) && \
+  (cp dev/compose/signing/scripts/* /var/lib/pulp/scripts/ 2>/dev/null || true) && \
+  chmod -R 0775 /etc/pulp /var/lib/pulp && \
+  cp docker/etc/settings.py /etc/pulp/settings.py && \
+  install -Dm 0755 docker/bin/start-api docker/bin/start-content-app docker/bin/start-worker \
+  docker/bin/wait-for-migrations docker/bin/wait-for-tcp /usr/local/bin/ && \
+  (install -Dm 0775 galaxy-operator/bin/readyz.py /usr/bin/ 2>/dev/null || true) && \
+  install -Dm 0644 docker/etc/settings.py /etc/pulp/settings.py && \
+  (install -Dm 0644 ansible.cfg /etc/ansible/ansible.cfg 2>/dev/null || true) && \
+  install -Dm 0755 docker/entrypoint.sh /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

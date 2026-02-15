@@ -59,10 +59,17 @@ x-galaxy-env: &galaxy-env
   PULP_ALLOWED_EXPORT_PATHS: /app/tmp
   PULP_ALLOWED_IMPORT_PATHS: /app/tmp
   PULP_GALAXY_AUTHENTICATION_CLASSES: "['galaxy_ng.app.auth.auth.RHIdentityAuthentication']"
-  PULP_GALAXY_FEATURE_FLAGS__dab_resource_registry: "false"
+  PULP_GALAXY_FEATURE_FLAGS__dab_resource_registry: "true"
+  PULP_GALAXY_FEATURE_FLAGS__display_signatures: "true"
+  PULP_GALAXY_FEATURE_FLAGS__display_repositories: "true"
+  PULP_GALAXY_FEATURE_FLAGS__signatures_enabled: "true"
+  PULP_GALAXY_FEATURE_FLAGS__can_create_signatures: "true"
+  PULP_GALAXY_FEATURE_FLAGS__can_upload_signatures: "false"
+  PULP_GALAXY_FEATURE_FLAGS__collection_signing: "true"
   PULP_GALAXY_REQUIRE_CONTENT_APPROVAL: "true"
   PULP_GALAXY_AUTO_SIGN_COLLECTIONS: "false"
   PULP_GALAXY_REQUIRE_SIGNATURE_FOR_APPROVAL: "false"
+  PULP_GALAXY_COLLECTION_SIGNING_SERVICE: "ansible-default"
   PULP_RESOURCE_SERVER_SYNC_ENABLED: "false"
   PULP_GALAXY_API_SPEC_REQUIRE_AUTHENTICATION: "false"
   GALAXY_IMPORTER_CONFIG: /app/profiles/insights/galaxy-importer/galaxy-importer.cfg
@@ -133,7 +140,12 @@ services:
       <<: *galaxy-env
     user: root
     <<: *debugging
-    command: ["bash", "-c", "set -e; echo 'Waiting for postgres...'; until python3 -c \"import socket; s=socket.socket(); s.connect(('postgres', 5432)); s.close()\" 2>/dev/null; do sleep 2; echo 'Still waiting...'; done; echo 'Postgres ready'; rm -rf /var/lib/pulp/.migrated; pulpcore-manager check --database default; pulpcore-manager migrate; pulpcore-manager shell < /app/dev/common/setup_test_data.py; pulpcore-manager createsuperuser --noinput || true; touch /var/lib/pulp/.migrated; chown -R galaxy:galaxy /etc/pulp /var/lib/pulp;"]
+    command:
+      [
+        "bash",
+        "-c",
+        'set -e; echo ''Waiting for postgres...''; until python3 -c "import socket; s=socket.socket(); s.connect((''postgres'', 5432)); s.close()" 2>/dev/null; do sleep 2; echo ''Still waiting...''; done; echo ''Postgres ready''; rm -rf /var/lib/pulp/.migrated; pulpcore-manager check --database default; pulpcore-manager migrate; pulpcore-manager shell < /app/dev/common/setup_test_data.py; pulpcore-manager createsuperuser --noinput || true; echo ''Setting up collection signing service...''; gpg --batch --no-default-keyring --keyring /etc/pulp/certs/galaxy.kbx --import /app/dev/common/ansible-sign.key; (echo 5; echo y; echo save) | gpg --no-default-keyring --keyring /etc/pulp/certs/galaxy.kbx --command-fd 0 --no-tty --no-greeting -q --edit-key galaxy3@ansible.com trust; mkdir -p ~/.gnupg; gpg --batch --homedir ~/.gnupg --import /app/dev/common/ansible-sign.key; (echo 5; echo y; echo save) | gpg --homedir ~/.gnupg --command-fd 0 --no-tty --no-greeting -q --edit-key galaxy3@ansible.com trust; chmod +x /app/dev/common/collection_sign.sh; pulpcore-manager add-signing-service ansible-default /app/dev/common/collection_sign.sh galaxy3@ansible.com 2>/dev/null || echo ''Signing service already exists''; touch /var/lib/pulp/.migrated; chown -R galaxy:galaxy /etc/pulp /var/lib/pulp;',
+      ]
 
   galaxy-api:
     image: "localhost/galaxy_ng/galaxy_ng:dev"
@@ -205,7 +217,7 @@ services:
       <<: *galaxy-env
     user: galaxy
     <<: *debugging
-    command: ["bash", "-c", "/app/docker/bin/wait-for-migrations; /app/docker/bin/start-worker"]
+    command: ["bash", "-c", "/app/docker/bin/wait-for-migrations; gpg --batch --no-default-keyring --keyring /etc/pulp/certs/galaxy.kbx --import /app/dev/common/ansible-sign.key 2>/dev/null; mkdir -p ~/.gnupg; gpg --batch --homedir ~/.gnupg --import /app/dev/common/ansible-sign.key 2>/dev/null; /app/docker/bin/start-worker"]
 
   galaxy-proxy:
     build:
@@ -264,6 +276,7 @@ services:
       NODE_ENV: development
       APP_NAME: automation-hub-new
       UI_PORT: 8003
+      NODE_OPTIONS: "--max-old-space-size=6144"
     depends_on:
       galaxy-proxy:
         condition: service_started

@@ -42,12 +42,12 @@ x-galaxy-common-env: &galaxy-common-env
   POSTGRES_USER: galaxy_ng
   POSTGRES_PASSWORD: galaxy_ng
   POSTGRES_DB: galaxy_ng
-  PULP_CACHE_ENABLED: 'true'
+  PULP_CACHE_ENABLED: "true"
   PULP_REDIS_HOST: redis
   REDIS_SERVICE_HOST: redis
   PULP_REDIS_PORT: 6379
   PULP_REDIS_PASSWORD: ""
-  PULP_ANALYTICS: 'false'
+  PULP_ANALYTICS: "false"
   PULP_DATABASES__default__ENGINE: django.db.backends.postgresql
   PULP_DATABASES__default__NAME: galaxy_ng
   PULP_DATABASES__default__USER: galaxy_ng
@@ -55,33 +55,39 @@ x-galaxy-common-env: &galaxy-common-env
   PULP_DATABASES__default__HOST: postgres
   PULP_DATABASES__default__PORT: 5432
   PULP_DEBUG: 1
-  PULP_GALAXY_DEPLOYMENT_MODE: 'insights'
-  PULP_RH_ENTITLEMENT_REQUIRED: 'insights'
+  PULP_GALAXY_DEPLOYMENT_MODE: "insights"
+  PULP_RH_ENTITLEMENT_REQUIRED: "insights"
   PULP_DEFAULT_FILE_STORAGE: "pulpcore.app.models.storage.FileSystem"
-  PULP_REDIRECT_TO_OBJECT_STORAGE: 'false'
+  PULP_REDIRECT_TO_OBJECT_STORAGE: "false"
   PULP_X_PULP_CONTENT_HOST: galaxy-content
   PULP_X_PULP_CONTENT_PORT: 24816
-  PULP_GALAXY_API_PATH_PREFIX: '/api/automation-hub/'
-  PULP_CONTENT_PATH_PREFIX: '/api/automation-hub/pulp/content/'
-  PULP_ANSIBLE_API_HOSTNAME: 'http://localhost:8080'
+  PULP_GALAXY_API_PATH_PREFIX: "/api/automation-hub/"
+  PULP_CONTENT_PATH_PREFIX: "/api/automation-hub/pulp/content/"
+  PULP_ANSIBLE_API_HOSTNAME: "http://localhost:8080"
   PULP_ANSIBLE_CONTENT_HOSTNAME: "http://localhost:8080"
   PULP_CONTENT_ORIGIN: "http://localhost:8080"
   PULP_CSRF_TRUSTED_ORIGINS: "['https://localhost']"
   PULP_ALLOWED_EXPORT_PATHS: /app/tmp
   PULP_ALLOWED_IMPORT_PATHS: /app/tmp
   PULP_GALAXY_AUTHENTICATION_CLASSES: "['galaxy_ng.app.auth.auth.RHIdentityAuthentication']"
-  PULP_GALAXY_FEATURE_FLAGS__dab_resource_registry: 'false'
-  PULP_GALAXY_REQUIRE_CONTENT_APPROVAL: 'true'
-  PULP_GALAXY_AUTO_SIGN_COLLECTIONS: 'false'
-  PULP_GALAXY_REQUIRE_SIGNATURE_FOR_APPROVAL: 'false'
-  GALAXY_REQUIRE_SIGNATURE_FOR_APPROVAL: 'false'
+  PULP_GALAXY_FEATURE_FLAGS__dab_resource_registry: "false"
+  PULP_GALAXY_FEATURE_FLAGS__signatures_enabled: "true"
+  PULP_GALAXY_FEATURE_FLAGS__can_create_signatures: "true"
+  PULP_GALAXY_FEATURE_FLAGS__can_upload_signatures: "false"
+  PULP_GALAXY_FEATURE_FLAGS__collection_signing: "true"
+  PULP_GALAXY_FEATURE_FLAGS__display_signatures: "true"
+  PULP_GALAXY_REQUIRE_CONTENT_APPROVAL: "true"
+  PULP_GALAXY_AUTO_SIGN_COLLECTIONS: "false"
+  PULP_GALAXY_REQUIRE_SIGNATURE_FOR_APPROVAL: "false"
+  GALAXY_REQUIRE_SIGNATURE_FOR_APPROVAL: "false"
+  PULP_GALAXY_COLLECTION_SIGNING_SERVICE: "ansible-default"
   ENABLE_COLLECTION_SIGNING: 0
-  PULP_RESOURCE_SERVER_SYNC_ENABLED: 'false'
-  PULP_GALAXY_API_SPEC_REQUIRE_AUTHENTICATION: 'false'
-  HUB_AUTH_URL: 'http://localhost:8080/auth/realms/redhat-external/protocol/openid-connect/token'
-  HUB_API_ROOT: 'http://localhost:8080/api/automation-hub/'
+  PULP_RESOURCE_SERVER_SYNC_ENABLED: "false"
+  PULP_GALAXY_API_SPEC_REQUIRE_AUTHENTICATION: "false"
+  HUB_AUTH_URL: "http://localhost:8080/auth/realms/redhat-external/protocol/openid-connect/token"
+  HUB_API_ROOT: "http://localhost:8080/api/automation-hub/"
   HUB_USE_MOVE_ENDPOINT: "true"
-  GALAXY_IMPORTER_ANSIBLE_LOCAL_TMP: '/tmp/ansible'
+  GALAXY_IMPORTER_ANSIBLE_LOCAL_TMP: "/tmp/ansible"
   HUB_LOCAL: 0
   HUB_TEST_MARKS: deployment_cloud or all
   LOCK_REQUIREMENTS: 0
@@ -96,11 +102,11 @@ services:
   #############################################################################
   # GALAXY_NG BACKEND SERVICES
   #############################################################################
-  
+
   postgres:
     image: "postgres:13"
     ports:
-      - '5433:5432'
+      - "5433:5432"
     environment:
       <<: *galaxy-common-env
     healthcheck:
@@ -169,6 +175,14 @@ services:
         pulpcore-manager migrate;
         pulpcore-manager shell < /src/galaxy_ng/dev/common/setup_test_data.py;
         pulpcore-manager createsuperuser --noinput || true;
+        echo 'Setting up collection signing service...';
+        gpg --batch --no-default-keyring --keyring /etc/pulp/certs/galaxy.kbx --import /src/galaxy_ng/dev/common/ansible-sign.key;
+        (echo 5; echo y; echo save) | gpg --no-default-keyring --keyring /etc/pulp/certs/galaxy.kbx --command-fd 0 --no-tty --no-greeting -q --edit-key galaxy3@ansible.com trust;
+        mkdir -p ~/.gnupg;
+        gpg --batch --homedir ~/.gnupg --import /src/galaxy_ng/dev/common/ansible-sign.key;
+        (echo 5; echo y; echo save) | gpg --homedir ~/.gnupg --command-fd 0 --no-tty --no-greeting -q --edit-key galaxy3@ansible.com trust;
+        chmod +x /src/galaxy_ng/dev/common/collection_sign.sh;
+        pulpcore-manager add-signing-service ansible-default /src/galaxy_ng/dev/common/collection_sign.sh galaxy3@ansible.com 2>/dev/null || echo 'Signing service already exists';
         touch /var/lib/pulp/.migrated;
         chown -R galaxy:galaxy /etc/pulp /var/lib/pulp;
       "
@@ -190,7 +204,7 @@ services:
       - "../:/src"
       - "../galaxy_ng:/app"
     ports:
-      - '5677:5677'
+      - "5677:5677"
     environment:
       <<: *galaxy-common-env
     extra_hosts:
@@ -229,7 +243,7 @@ services:
       - "../:/src"
       - "../galaxy_ng:/app"
     ports:
-      - '5678:5678'
+      - "5678:5678"
     environment:
       <<: *galaxy-common-env
     extra_hosts:
@@ -270,7 +284,7 @@ services:
       - "../:/src"
       - "../galaxy_ng:/app"
     ports:
-      - '5679:5679'
+      - "5679:5679"
     environment:
       <<: *galaxy-common-env
     user: galaxy
@@ -279,6 +293,9 @@ services:
       bash -c "
         /src/galaxy_ng/dev/compose/bin/devinstall;
         /src/galaxy_ng/dev/compose/bin/wait /var/lib/pulp/.migrated;
+        gpg --batch --no-default-keyring --keyring /etc/pulp/certs/galaxy.kbx --import /src/galaxy_ng/dev/common/ansible-sign.key 2>/dev/null || true;
+        mkdir -p ~/.gnupg;
+        gpg --batch --homedir ~/.gnupg --import /src/galaxy_ng/dev/common/ansible-sign.key 2>/dev/null || true;
         gpg --list-secret-keys;
         ENTRYPOINT=/venv/bin/pulpcore-worker /src/galaxy_ng/dev/compose/bin/reloader start-worker
       "
@@ -380,4 +397,3 @@ volumes:
 networks:
   service-mesh:
     name: hub-dev-service-mesh
-
