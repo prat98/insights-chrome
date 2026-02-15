@@ -73,6 +73,7 @@ check_hosts() {
 
 cmd_build() {
     local remote=false
+    local no_cache=false
     local github_token=""
     local chrome_repo="" chrome_ref=""
     local hub_ui_repo="" hub_ui_ref=""
@@ -83,6 +84,7 @@ cmd_build() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             --remote|-r)         remote=true ;;
+            --no-cache)          no_cache=true ;;
             --token=*)           github_token="${1#*=}" ;;
             --chrome=*)          chrome_ref="${1#*=}" ;;
             --chrome-repo=*)     chrome_repo="${1#*=}" ;;
@@ -106,16 +108,25 @@ cmd_build() {
     fi
 
     if [ "$remote" = true ]; then
-        build_remote "$github_token" "$chrome_repo" "$chrome_ref" "$hub_ui_repo" "$hub_ui_ref" \
+        build_remote "$no_cache" "$github_token" "$chrome_repo" "$chrome_ref" "$hub_ui_repo" "$hub_ui_ref" \
                      "$aap_ui_repo" "$aap_ui_ref" "$galaxy_repo" "$galaxy_ref"
     else
-        build_local
+        build_local "$no_cache"
     fi
 }
 
 build_local() {
+    local no_cache="$1"
+    local cache_flag=""
+    if [ "$no_cache" = "true" ]; then
+        cache_flag="--no-cache"
+    fi
+
     header
     echo -e "${BOLD}Building from local repos...${NC}"
+    if [ -n "$cache_flag" ]; then
+        echo -e "${YELLOW}Cache disabled (--no-cache)${NC}"
+    fi
     echo ""
 
     # Check repos exist
@@ -139,7 +150,7 @@ build_local() {
     echo ""
     echo "Building frontend image..."
     cd "$PARENT_DIR"
-    $RUNTIME build -t hub-dev-env:latest -f insights-chrome/Dockerfile.dev-env .
+    $RUNTIME build $cache_flag -t hub-dev-env:latest -f insights-chrome/Dockerfile.dev-env .
 
     echo ""
     echo -e "${GREEN}${BOLD}Build complete!${NC}"
@@ -148,14 +159,22 @@ build_local() {
 }
 
 build_remote() {
-    local github_token="$1"
-    local chrome_repo="$2" chrome_ref="$3"
-    local hub_ui_repo="$4" hub_ui_ref="$5"
-    local aap_ui_repo="$6" aap_ui_ref="$7"
-    local galaxy_repo="$8" galaxy_ref="$9"
+    local no_cache="$1"
+    local github_token="$2"
+    local chrome_repo="$3" chrome_ref="$4"
+    local hub_ui_repo="$5" hub_ui_ref="$6"
+    local aap_ui_repo="$7" aap_ui_ref="$8"
+    local galaxy_repo="$9" galaxy_ref="${10}"
+    local cache_flag=""
+    if [ "$no_cache" = "true" ]; then
+        cache_flag="--no-cache"
+    fi
 
     header
     echo -e "${BOLD}Building from remote repos...${NC}"
+    if [ -n "$cache_flag" ]; then
+        echo -e "${YELLOW}Cache disabled (--no-cache)${NC}"
+    fi
     echo ""
 
     local build_args=""
@@ -194,7 +213,7 @@ build_remote() {
         build_args="$build_args --build-arg AAP_UI_REF=$aap_ui_ref"
         echo -e "  aap-ui:          ${GREEN}$aap_ui_ref${NC}"
     else
-        echo -e "  aap-ui:          ${DIM}test-changes-in-parallel-hub-migration (default)${NC}"
+        echo -e "  aap-ui:          ${DIM}main (default)${NC}"
     fi
 
     if [ -n "$galaxy_repo" ]; then
@@ -210,7 +229,7 @@ build_remote() {
     echo ""
     echo "Building image (cloning repos, installing deps)..."
     cd "$SCRIPT_DIR"
-    $RUNTIME build -t hub-dev-env:latest -f Dockerfile.dev-env-remote $build_args .
+    $RUNTIME build $cache_flag -t hub-dev-env:latest -f Dockerfile.dev-env-remote $build_args .
 
     echo ""
     echo -e "${GREEN}${BOLD}Build complete!${NC}"
@@ -387,6 +406,7 @@ cmd_help() {
     echo ""
     echo -e "${BOLD}Build options:${NC}"
     echo "  --remote                  Clone repos from GitHub instead of using local"
+    echo "  --no-cache                Build from scratch without using cached layers"
     echo "  --chrome=<ref>            insights-chrome branch/tag/SHA"
     echo "  --hub-ui=<ref>            ansible-hub-ui branch/tag/SHA"
     echo "  --aap-ui=<ref>            aap-ui branch/tag/SHA"

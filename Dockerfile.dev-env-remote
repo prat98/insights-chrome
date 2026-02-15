@@ -30,7 +30,7 @@ ARG ANSIBLE_HUB_UI_REPO=https://github.com/ansible/ansible-hub-ui.git
 ARG ANSIBLE_HUB_UI_REF=master
 
 ARG AAP_UI_REPO=https://github.com/ansible/aap-ui.git
-ARG AAP_UI_REF=test-changes-in-parallel-hub-migration
+ARG AAP_UI_REF=main
 
 ARG GALAXY_NG_REPO=https://github.com/prat98/galaxy_ng.git
 ARG GALAXY_NG_REF=proxy-setup
