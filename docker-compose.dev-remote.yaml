@@ -259,13 +259,21 @@ services:
   aap-ui:
     image: hub-dev-env:latest
     working_dir: /workspace/aap-ui/frontend/hub/insights
-    command: sh -c "APP_NAME=automation-hub-new UI_PORT=8003 npm start"
+    command: >
+      sh -c "
+        sed -i 's|publicPath: .*/apps/automation-hub/.*|publicPath: \"/apps/automation-hub-new/\",|' webpack.config.cjs &&
+        sed -i \"s|FEDERATION_NAME = 'automationHub'|FEDERATION_NAME = 'automationHubNew'|\" webpack.config.cjs &&
+        sed -i 's|\"appname\": \"automation-hub\"|\"appname\": \"automation-hub-new\"|' package.json &&
+        APP_NAME=automation-hub-new UI_PORT=8002 npm start
+      "
     ports:
-      - "8003:8003"
+      - "8003:8002"
     environment:
       NODE_ENV: development
       APP_NAME: automation-hub-new
-      UI_PORT: 8003
+      UI_PORT: 8002
+      ROUTE_PREFIX: /ansible/automation-hub-new
+      UI_BASE_PATH: /ansible/automation-hub-new/
       NODE_OPTIONS: "--max-old-space-size=6144"
     depends_on:
       galaxy-proxy:
@@ -274,7 +282,11 @@ services:
   insights-chrome:
     image: hub-dev-env:latest
     working_dir: /workspace/insights-chrome
-    command: sh -c "NAV_CONFIG=9000 npm run dev"
+    command: >
+      sh -c "
+        sed -i \"s|:8003|:8002|g\" config/webpack.config.js &&
+        NAV_CONFIG=9000 npm run dev
+      "
     ports:
       - "1337:1337"
     environment:
