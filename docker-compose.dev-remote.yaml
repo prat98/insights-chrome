@@ -262,7 +262,7 @@ services:
     command: >
       sh -c "
         sed -i 's|publicPath: .*/apps/automation-hub/.*|publicPath: \"/apps/automation-hub-new/\",|' webpack.config.cjs &&
-        sed -i \"s|FEDERATION_NAME = 'automationHub'|FEDERATION_NAME = 'automationHubNew'|\" webpack.config.cjs &&
+        sed -i \"s|FEDERATION_NAME = 'automationHub';|FEDERATION_NAME = 'automationHubNew';|\" webpack.config.cjs &&
         sed -i 's|\"appname\": \"automation-hub\"|\"appname\": \"automation-hub-new\"|' package.json &&
         APP_NAME=automation-hub-new UI_PORT=8002 npm start
       "
